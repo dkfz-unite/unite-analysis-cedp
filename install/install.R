@@ -1,0 +1,10 @@
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+BiocManager::install("limma")
+BiocManager::install("edgeR") # prerequisite for sva
+BiocManager::install("sva")
+install.packages("readr")
+install.packages("dplyr")
+install.packages("jsonlite")
+install.packages("Rfit")
+install.packages("emmeans")
+install.packages("nlme")
