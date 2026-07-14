@@ -1,0 +1,22 @@
+sample	condition	batch	donor	specimen	specimen_type
+6	meningioma_benign	Brain Atlas Batch6	BA006	tumor01	Material
+430	meningioma_benign	Brain Atlas Demo	BA430	tumor01	Material
+2	meningioma_benign	Brain Atlas Batch7	BA002	tumor01	Material
+345	meningioma_benign	Brain Atlas Batch2	BA345	tumor01	Material
+167	meningioma_benign	Brain Atlas Demo	BA167	tumor01	Material
+128	meningioma_benign	Brain Atlas Demo	BA128	tumor01	Material
+143	meningioma_benign	Brain Atlas Demo	BA143	tumor01	Material
+426	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch1	BA426	tumor01	Material
+22	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch6	BA022	tumor01	Material
+460	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch7	BA460	tumor01	Material
+462	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch3	BA462	tumor01	Material
+335	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch2	BA335	tumor01	Material
+399	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch6	BA399	tumor01	Material
+451	glioblastoma_IDH_wildtype_mesenchymal_type	Brain Atlas Batch1	BA451	tumor01	Material
+190	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Batch2	BA190	tumor01	Material
+200	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Demo	BA200	tumor01	Material
+342	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Demo	BA342	tumor01	Material
+433	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Batch6	BA433	tumor01	Material
+154	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Batch2	BA154	tumor01	Material
+473	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Batch1	BA473	tumor01	Material
+336	glioblastoma_IDH_wildtype_RTK1_type	Brain Atlas Demo	BA336	tumor01	Material
