@@ -1,39 +1,63 @@
-# functions to return the overall models
+# functions to write the overall models
 
+.write_table_with_header <- function(table, header, path, row.names=TRUE) {
+    con <- file(path, open = "w")
+    on.exit(close(con))
+    writeLines(paste0("# ", strsplit(header, "\n")[[1]]), con)
+    write.table(table, con, sep = "\t", quote = FALSE, row.names = row.names, na = "")
+}
+
+write_contrasts <- function(prs, path) {
+    header <- paste(attr(prs, "mesg"), collapse = "\n")
+    .write_table_with_header(prs, header, path, row.names = FALSE)
+}
+
+write_lm_test <- function(av, path) {
+    header <- paste(attr(av, "heading"), collapse = "\n")
+    .write_table_with_header(av, header, path, row.names=FALSE)
+}
+
+write_rfit_test <- function(dr, path) {
+    formulas <- attr(dr, "formulas")
+    header <- paste0(
+        "Rfit::drop.test",
+        "\n  M1: ", deparse1(formulas$reduced),
+        "\n  M2: ", deparse1(formulas$full)
+    )
+    #browser()
+    tbl <- data.frame(
+        Df       = paste(dr$df1,dr$df2,sep=","),
+        RD       = dr$RD,
+        F        = dr$F[1],
+        p = dr$p.value[1]
+    )
+    .write_table_with_header(tbl, header, path, row.names=FALSE)
+}
+
+# functions to fit each model type
 .fit_lm <- function(full_formula, reduced_formula, model_data) {
     model         <- lm(full_formula, data = model_data)
     reduced_model <- lm(reduced_formula, data = model_data)
     av <- anova(reduced_model, model, test = "F")
-    overall_test <- data.frame(
-        statistic = av[2, "F"],
-        df        = paste0(av[2, "Df"], ", ", av[2, "Res.Df"]),
-        p_value   = av[2, "Pr(>F)"]
-    )
-
     emm <- emmeans::emmeans(model, ~condition)
-    return(list(model = model, reduced_model = reduced_model, overall_test = overall_test, emm = emm))
+    return(list(model = model, reduced_model = reduced_model, overall_test = av, emm = emm, write_table_func=write_lm_test))
 }
 
 .fit_rfit <- function(full_formula, reduced_formula, model_data) {
     model         <- Rfit::rfit(full_formula, data = model_data)
     reduced_model <- Rfit::rfit(reduced_formula, data = model_data)
-
     dr <- Rfit::drop.test(model, reduced_model)
-    overall_test <- data.frame(
-        statistic = dr$F[1],
-        df        = paste0(dr$df1, ", ", dr$df2),
-        p_value   = dr$p.value[1]
-    )
-
+    attr(dr, "formulas") <- list(full = full_formula, reduced = reduced_formula)
     df_resid <- nrow(model_data) - length(coef(model))
     emm <- emmeans::emmeans(
         emmeans::qdrg(full_formula, data = model_data,
                       coef = coef(model), vcov = vcov(model), df = df_resid),
         ~ condition
     )
-    return(list(model = model, reduced_model = reduced_model, overall_test = overall_test, emm = emm))
+    return(list(model = model, reduced_model = reduced_model, overall_test = dr, emm = emm, write_table_func=write_rfit_test))
 }
 
+# build the formula objects
 .build_formulas <- function(covariates) {
     cov_terms       <- if (!is.null(covariates)) paste(names(covariates), collapse = " + ") else NULL
     full_formula    <- as.formula(paste("outcome ~ condition", if (!is.null(cov_terms)) paste("+", cov_terms) else ""))
@@ -41,6 +65,7 @@
     return(list(cov_terms = cov_terms, full_formula = full_formula, reduced_formula = reduced_formula))
 }
 
+# dispatch correct model fitting function
 .fit_model <- function(full_formula, reduced_formula, model_data, method) {
         method <- match.arg(method, c("lm", "rfit"))
         fit <- switch(method,
@@ -50,6 +75,7 @@
     return(fit)
 }
 
+# build data frame of data for modelling
 .get_model_data <- function (condition, outcome, covariates=NULL){
     condition  <- as.factor(condition)
     model_data <- data.frame(outcome = outcome, condition = condition)
@@ -63,24 +89,32 @@
 
 .pairwise_contrasts <- function(emm, adjust) {
     prs <- summary(pairs(emm), adjust = adjust, infer = c(TRUE, TRUE))
-    contrasts_df <- data.frame(
-        contrast    = as.character(prs$contrast),
-        estimate    = prs$estimate,
-        SE          = prs$SE,
-        CI_lower = prs$lower.CL,
-        CI_upper = prs$upper.CL,
-        p_value = prs$p.value,
-    )
-    return(contrasts_df)
+    # contrasts_df <- data.frame(
+    #     contrast    = as.character(prs$contrast),
+    #     estimate    = prs$estimate,
+    #     SE          = prs$SE,
+    #     CI_lower = prs$lower.CL,
+    #     CI_upper = prs$upper.CL,
+    #     p_value = prs$p.value
+    # )
+    # # keep info
+    # comment(contrasts_df) <- paste(attr(prs, "mesg"), collapse = "\n")
+    return(prs)
 }
 
 .get_plot_values <- function(model, outcome, return_covariate_adjusted) {
    values <- if (return_covariate_adjusted) {
-        residuals(fit$model) + mean(outcome, na.rm = TRUE)
+        residuals(model) + mean(outcome, na.rm = TRUE)
     } else {
         outcome
     }
     return(values)
+}
+
+get_outcome <- function(data, feature) {
+    if (!feature %in% colnames(data))
+        stop("Feature '", feature, "' not found in data.")
+    as.numeric(data[, feature])
 }
 
 get_covariates <- function(batch) {
@@ -129,16 +163,16 @@ fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", 
                                   condition=condition,
                                   covariates=covariates)
 
-
     formulas        <- .build_formulas(covariates)
     full_formula    <- formulas$full_formula
     reduced_formula <- formulas$reduced_formula
     fit <- .fit_model(full_formula=full_formula,
+                      model_data=model_data,
                       reduced_formula=reduced_formula,
-                      model_type=model_type)
+                      method=model_type)
   
     # ---- pairwise contrasts ----
-    contrasts_df <- .pairwise_contrasts(emm=fit$emm,
+    contrasts <- .pairwise_contrasts(emm=fit$emm,
                                         adjust="tukey")
     
     # return either covariate adjusted or unadjusted values
@@ -148,8 +182,9 @@ fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", 
                                return_covariate_adjusted=return_covariate_adjusted)
 
     list(
+        write_table_func = fit$write_table_func,
         overall_test = fit$overall_test,
-        contrasts    = contrasts_df,
+        contrasts    = contrasts,
         values       = data.frame(condition = condition, value = values)
     )
 }
@@ -159,13 +194,15 @@ fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", 
 #' @param results Named list returned by \code{fit_model}.
 #' @param output_dir Directory to write files into.
 #' @param prefix Optional string prepended to each filename (e.g. a feature name).
-write_model_results <- function(results, output_dir, prefix = NULL) {
+write_model_results <- function(results, output_dir, prefix = NULL, write_test_fn = write_lm_test) {
     fname <- function(name) {
         parts <- c(prefix, name)
         file.path(output_dir, paste0(paste(parts, collapse = "_"), ".tsv"))
     }
-    write.table(results$overall_test, fname("overall_test"), sep = "\t", row.names = FALSE, quote = FALSE)
-    write.table(results$contrasts,    fname("contrasts"),    sep = "\t", row.names = FALSE, quote = FALSE)
-    write.table(results$values,       fname("values"),       sep = "\t", row.names = FALSE, quote = FALSE)
+    # execute custom writer for each model type
+    results$write_table_func(results$overall_test, fname("overall_test"))
+    # execute generic writers for contrasts and values
+    write_contrasts(results$contrasts, fname("contrasts"))
+    write.table(results$values,    fname("values"),    sep = "\t", row.names = FALSE, quote = FALSE)
     invisible(NULL)
 }

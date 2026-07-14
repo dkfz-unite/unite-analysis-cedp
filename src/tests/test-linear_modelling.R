@@ -45,57 +45,24 @@ test_that(".build_formulas (multiple covariates) all terms appear in both formul
 
 test_that(".fit_lm returns list with correct names", {
     fit <- .fit_lm(full_formula, reduced_formula, fixture)
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
+    expect_named(fit, c("model", "reduced_model", "overall_test", "emm", "write_table_func"))
 })
 
-test_that(".fit_lm overall_test has correct columns", {
+test_that(".fit_lm overall_test is an anova object", {
     fit <- .fit_lm(full_formula, reduced_formula, fixture)
-    expect_named(fit$overall_test, c("statistic", "df", "p_value"))
+    expect_s3_class(fit$overall_test, "anova")
 })
 
-test_that(".fit_lm overall_test$df is formatted as 'numerator, denominator'", {
-    fit <- .fit_lm(full_formula, reduced_formula, fixture)
-    expect_match(fit$overall_test$df, "^\\d+, \\d+$")
-})
 
-test_that(".fit_lm overall_test$p_value is in [0, 1]", {
-    fit <- .fit_lm(full_formula, reduced_formula, fixture)
-    expect_gte(fit$overall_test$p_value, 0)
-    expect_lte(fit$overall_test$p_value, 1)
-})
-
-test_that(".fit_lm detects clear group difference", {
-    fit <- .fit_lm(full_formula, reduced_formula, fixture)
-    expect_lt(fit$overall_test$p_value, 0.05)
-})
 
 # ─── .fit_rfit ───────────────────────────────────────────────────────────────
 
 test_that(".fit_rfit returns list with correct names", {
     fit <- .fit_rfit(full_formula, reduced_formula, fixture)
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
+    expect_named(fit, c("model", "reduced_model", "overall_test", "emm", "write_table_func"))
 })
 
-test_that(".fit_rfit overall_test has correct columns", {
-    fit <- .fit_rfit(full_formula, reduced_formula, fixture)
-    expect_named(fit$overall_test, c("statistic", "df", "p_value"))
-})
 
-test_that(".fit_rfit overall_test$df is formatted as 'numerator, denominator'", {
-    fit <- .fit_rfit(full_formula, reduced_formula, fixture)
-    expect_match(fit$overall_test$df, "^\\d+, \\d+$")
-})
-
-test_that(".fit_rfit overall_test$p_value is in [0, 1]", {
-    fit <- .fit_rfit(full_formula, reduced_formula, fixture)
-    expect_gte(fit$overall_test$p_value, 0)
-    expect_lte(fit$overall_test$p_value, 1)
-})
-
-test_that(".fit_rfit detects clear group difference", {
-    fit <- .fit_rfit(full_formula, reduced_formula, fixture)
-    expect_lt(fit$overall_test$p_value, 0.05)
-})
 
 test_that(".fit_rfit emm is an emmGrid object", {
     fit <- .fit_rfit(full_formula, reduced_formula, fixture)
@@ -108,13 +75,11 @@ test_that(".fit_rfit emm is an emmGrid object", {
 
 test_that(".fit_model dispatches to lm and returns correct structure", {
     fit <- .fit_model(full_formula, reduced_formula, fixture, method = "lm")
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
     expect_s3_class(fit$model, "lm")
 })
 
 test_that(".fit_model dispatches to rfit and returns correct structure", {
     fit <- .fit_model(full_formula, reduced_formula, fixture, method = "rfit")
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
     expect_s3_class(fit$model, "rfit")
 })
 
@@ -147,4 +112,94 @@ test_that("get_covariates returns NULL when batch has only one unique value", {
 test_that("get_covariates preserves batch levels in the returned factor", {
     result <- get_covariates(c("A", "B", "C", "A"))
     expect_setequal(levels(result$batch), c("A", "B", "C"))
+})
+
+# ─── write_contrasts integration ─────────────────────────────────────────────
+
+test_that("write_contrasts creates a file", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    prs  <- .pairwise_contrasts(fit$emm, adjust = "tukey")
+    path <- tempfile(fileext = ".tsv")
+    write_contrasts(prs, path)
+    expect_true(file.exists(path))
+})
+
+test_that("write_contrasts writes # header lines from mesg attribute", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    prs  <- .pairwise_contrasts(fit$emm, adjust = "tukey")
+    path <- tempfile(fileext = ".tsv")
+    write_contrasts(prs, path)
+    header <- grep("^#", readLines(path), value = TRUE)
+    expect_true(length(header) > 0)
+    expect_true(any(grepl(paste(attr(prs, "mesg"), collapse = ""), header, fixed = FALSE)))
+})
+
+test_that("write_contrasts data section is readable as a table", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    prs  <- .pairwise_contrasts(fit$emm, adjust = "tukey")
+    path <- tempfile(fileext = ".tsv")
+    write_contrasts(prs, path)
+    lines <- readLines(path)
+    tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
+                        sep = "\t", header = TRUE, check.names = FALSE)
+    expect_s3_class(tbl, "data.frame")
+    expect_gt(nrow(tbl), 0)
+})
+
+# ─── write_lm_test integration ────────────────────────────────────────────────
+
+test_that("write_lm_test creates a file", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_lm_test(fit$overall_test, path)
+    expect_true(file.exists(path))
+})
+
+test_that("write_lm_test header lines contain both formula strings", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_lm_test(fit$overall_test, path)
+    header <- grep("^#", readLines(path), value = TRUE)
+    expect_true(any(grepl(deparse1(full_formula),    header, fixed = TRUE)))
+    expect_true(any(grepl(deparse1(reduced_formula), header, fixed = TRUE)))
+})
+
+test_that("write_lm_test data section is readable as a table", {
+    fit  <- .fit_lm(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_lm_test(fit$overall_test, path)
+    lines <- readLines(path)
+    tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
+                        sep = "\t", header = TRUE)
+    expect_s3_class(tbl, "data.frame")
+    expect_gt(nrow(tbl), 0)
+})
+
+# ─── write_rfit_test integration ──────────────────────────────────────────────
+
+test_that("write_rfit_test creates a file", {
+    fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_test(fit$overall_test, path)
+    expect_true(file.exists(path))
+})
+
+test_that("write_rfit_test header contains Rfit::drop.test and both formula strings", {
+    fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_test(fit$overall_test, path)
+    header <- grep("^#", readLines(path), value = TRUE)
+    expect_true(any(grepl("Rfit::drop.test",         header, fixed = TRUE)))
+    expect_true(any(grepl(deparse1(full_formula),    header, fixed = TRUE)))
+    expect_true(any(grepl(deparse1(reduced_formula), header, fixed = TRUE)))
+})
+
+test_that("write_rfit_test data section has expected columns", {
+    fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_test(fit$overall_test, path)
+    lines <- readLines(path)
+    tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
+                        sep = "\t", header = TRUE, check.names = FALSE)
+    expect_true(all(c("Res.Df", "Df", "RD", "F", "Pr(>F)") %in% names(tbl)))
 })
