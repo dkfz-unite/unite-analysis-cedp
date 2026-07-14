@@ -1,0 +1,119 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  build-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: dkfz-unite/unite-commands
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish web app (amd64)
+        run: sh publish-linux-x64.sh
+      - name: Upload artifacts (amd64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-amd64
+          path: ./publish/linux-x64
+      - name: Publish web app (arm64)
+        run: sh publish-linux-arm64.sh
+      - name: Upload artifacts (arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64
+          path: ./publish/linux-arm64
+      
+  build-amd64:
+    needs: build-app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Remove old web app
+        run: rm -rf app
+      - name: Copy new web app
+        uses: actions/download-artifact@v4
+        with:
+          name: app-amd64
+          path: ./app
+      - name: Make web app executable
+        run: chmod a+rx ./app/commands
+      - name: Build amd64 image
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:amd64 \
+            --build-arg USER=${{ github.actor }} \
+            --build-arg TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE }}:amd64
+  build-arm64:
+    # runs-on: macos-latest
+    needs: build-app
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Remove old web app
+        run: rm -rf app
+      - name: Copy new web app
+        uses: actions/download-artifact@v4
+        with:
+          name: app-arm64
+          path: ./app
+      - name: Make web app executable
+        run: chmod a+rx ./app/commands
+      - name: Build arm64 image
+        run: |
+          docker build \
+            --platform linux/arm64 \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:arm64 \
+            --build-arg USER=${{ github.actor }} \
+            --build-arg TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE }}:arm64
+  create-manifest:
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest \
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:amd64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:arm64
