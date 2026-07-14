@@ -106,7 +106,7 @@ The preprocessing of the data is configurable.
 - `min_non_missing_fraction`:[float (0<x<=1.)] the minimum proportion of non-missing values of a protein required for it be retained for analysis
 - `require_min_fraction_one_class`: [true,false] if true a protein must exceed `min_non_missing_fraction` in only one class, to retained.
 - `feature`: string the name of the feature to be analysed, must correspond to a row name in in `metadata.tsv`
--  `model_type`: ["lm", "rfit", "gls_unequalvar"] the type of linear model to fit to estimate the effects. See 'Analysis Details' below.
+-  `model_type`: ["lm", "rfit"] the type of linear model to fit to estimate the effects. See 'Analysis Details' below.
 ```json
 {
   "model_type": "lm",

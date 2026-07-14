@@ -102,77 +102,6 @@ test_that(".fit_rfit emm is an emmGrid object", {
     expect_s4_class(fit$emm, "emmGrid")
 })
 
-# ─── .fit_gls_unequalvar ─────────────────────────────────────────────────────
-
-test_that(".fit_gls_unequalvar returns list with correct names", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
-})
-
-test_that(".fit_gls_unequalvar overall_test has correct columns", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    expect_named(fit$overall_test, c("statistic", "df", "p_value"))
-})
-
-test_that(".fit_gls_unequalvar overall_test$df is a single integer string (LRT df)", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    expect_match(fit$overall_test$df, "^\\d+$")
-})
-
-test_that(".fit_gls_unequalvar overall_test$p_value is in [0, 1]", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    expect_gte(fit$overall_test$p_value, 0)
-    expect_lte(fit$overall_test$p_value, 1)
-})
-
-test_that(".fit_gls_unequalvar detects clear group difference", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    expect_lt(fit$overall_test$p_value, 0.05)
-})
-
-test_that(".fit_gls_unequalvar returned model is REML fit (not ML)", {
-    fit <- .fit_gls_unequalvar(full_formula, reduced_formula, fixture)
-    # call$method is NULL when REML is used (the default), "ML" when explicitly set
-    expect_false(identical(fit$model$call$method, "ML"))
-})
-
-# ─── .safe_gls ───────────────────────────────────────────────────────────────
-
-test_that(".safe_gls returns a gls object on well-behaved data", {
-    fit <- .safe_gls(full_formula, data = fixture,
-                     weights = nlme::varIdent(form = ~1 | condition))
-    expect_s3_class(fit, "gls")
-})
-
-test_that(".safe_gls errors when a group has zero within-group variance", {
-    # varIdent must estimate a scale factor of 0 for the constant group,
-    # which is a boundary value — nlme emits a convergence warning
-    zero_var_data <- data.frame(
-        outcome   = c(rep(0, 10), rnorm(10, mean = 5)),
-        condition = factor(rep(c("A", "B"), each = 10))
-    )
-    expect_error(
-        .safe_gls(outcome ~ condition, data = zero_var_data,
-                  weights = nlme::varIdent(form = ~1 | condition))
-    )
-})
-
-test_that(".safe_gls errors when apVar signals variance estimation failure", {
-    # mock nlme::gls to return a model whose apVar is a failure string
-    # (the path that .safe_gls catches when nlme converges silently but incorrectly)
-    local_mocked_bindings(
-        gls = function(...) structure(
-            list(apVar = "Non-positive definite approximate variance-covariance"),
-            class = "gls"
-        ),
-        .package = "nlme"
-    )
-    expect_error(
-        .safe_gls(outcome ~ condition, data = fixture,
-                  weights = nlme::varIdent(form = ~1 | condition)),
-        "variance estimation failed"
-    )
-})
 
 # ─── .fit_model ──────────────────────────────────────────────────────────────
 
@@ -187,12 +116,6 @@ test_that(".fit_model dispatches to rfit and returns correct structure", {
     fit <- .fit_model(full_formula, reduced_formula, fixture, method = "rfit")
     expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
     expect_s3_class(fit$model, "rfit")
-})
-
-test_that(".fit_model dispatches to gls_unequalvar and returns correct structure", {
-    fit <- .fit_model(full_formula, reduced_formula, fixture, method = "gls_unequalvar")
-    expect_named(fit, c("model", "reduced_model", "overall_test", "emm"))
-    expect_s3_class(fit$model, "gls")
 })
 
 test_that(".fit_model errors on invalid method", {

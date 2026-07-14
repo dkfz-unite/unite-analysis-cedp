@@ -34,57 +34,6 @@
     return(list(model = model, reduced_model = reduced_model, overall_test = overall_test, emm = emm))
 }
 
-# Wrapper around nlme::gls that converts convergence warnings to errors and
-# checks the post-fit apVar for silent failures.
-.safe_gls <- function(...) {
-    model <- withCallingHandlers(
-        nlme::gls(...),
-        warning = function(w) {
-            if (grepl("converge|iteration limit|singular", conditionMessage(w), ignore.case = TRUE)) {
-                stop(paste("GLS convergence failure:", conditionMessage(w)), call. = FALSE)
-            }
-        }
-    )
-    # apVar is a matrix on success; nlme sets it to a character string on failure
-    if (inherits(model$apVar, "character")) {
-        stop(paste("GLS variance estimation failed:", model$apVar), call. = FALSE)
-    }
-    model
-}
-
-.fit_gls_unequalvar <- function(full_formula, reduced_formula, model_data) {
-    # fit once with "maximum likelihood" method (this is needed for the likelihood ratio test)
-    # comparing the full and reduced models
-    # F-test is not possible with unequal variances
-    model_ml   <- .safe_gls(full_formula, data = model_data,
-                             weights = nlme::varIdent(form = ~1 | condition), method = "ML")
-
-    # although 'condition' is not present in the reduced model we keep the weights specification to account for the
-    # unequal variances in the conditions. This should give better estimates of the covariate effects than if
-    # we did not
-    reduced_ml <- .safe_gls(reduced_formula, data = model_data,
-                             weights = nlme::varIdent(form = ~1 | condition), method = "ML")
-
-    lrt    <- anova(reduced_ml, model_ml)
-    chi_df <- lrt[2, "df"] - lrt[1, "df"]
-    overall_test <- data.frame(
-        statistic = lrt[2, "L.Ratio"],
-        df        = as.character(chi_df),
-        p_value   = lrt[2, "p-value"]
-    )
-    # REML (default "method") gives better estimates of the variance parameters and CIs
-    # compared to ML
-    model         <- .safe_gls(full_formula, data = model_data,
-                                weights = nlme::varIdent(form = ~1 | condition))
-
-    # the same logic applies here as above for why we keep the uneven-condition variance specification
-    reduced_model <- .safe_gls(reduced_formula, data = model_data,
-                                weights = nlme::varIdent(form = ~1 | condition))
-    browser()
-    emm <- emmeans::emmeans(model, ~ condition, data=model_data)
-    return(list(model = model, reduced_model = reduced_model, overall_test = overall_test, emm = emm))
-}
-
 .build_formulas <- function(covariates) {
     cov_terms       <- if (!is.null(covariates)) paste(names(covariates), collapse = " + ") else NULL
     full_formula    <- as.formula(paste("outcome ~ condition", if (!is.null(cov_terms)) paste("+", cov_terms) else ""))
@@ -93,7 +42,7 @@
 }
 
 .fit_model <- function(full_formula, reduced_formula, model_data, method) {
-        method <- match.arg(method, c("lm", "rfit", "gls_unequalvar"))
+        method <- match.arg(method, c("lm", "rfit"))
         fit <- switch(method,
         lm             = .fit_lm(full_formula, reduced_formula, model_data),
         rfit           = .fit_rfit(full_formula, reduced_formula, model_data)
@@ -157,9 +106,6 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 #'       partial F-test from \code{drop1}.}
 #'     \item{"rfit"}{Rank-based regression via \code{Rfit::rfit}, robust to
 #'       outliers. Overall test uses \code{Rfit::drop.test}.}
-#'     \item{"gls_unequalvar"}{GLS with per-condition heteroscedastic errors via
-#'       \code{nlme::gls} and \code{varIdent}. Overall test uses a likelihood
-#'       ratio test (models fit by ML); emmeans and residuals use the REML fit.}
 #'   }
 #' @param return_covariate_adjusted Logical. If \code{TRUE}, the returned \code{values}
 #'   are covariate-adjusted: residuals from the covariate-only (reduced) model
