@@ -18,14 +18,13 @@ data <- read_tsv(data_file)
 metadata <- read_tsv(metadata_file)
 options <- fromJSON(options_file)
 print(names(options))
-# Preprocess data (log, normalize, impute, batch correct)
-rownames(data_matrix) <- data[[1]] # set feature names as rownames
+
+
 data_matrix <- as.data.frame(data[,-1]) # remove feature column for processing
+rownames(data_matrix) <- data[[1]] # set feature names as rownames
 
-
-
-# reorder metadata rows to match data matrix columns
-metadata_matrix <- metadata_matrix[match(colnames(data_matrix), rownames(metadata_matrix)), ,drop = FALSE]
+metadata_matrix <- as.data.frame(metadata[, -1]) # assuming first column is sample names
+rownames(metadata_matrix) <- metadata[[1]] # set sample names as rownames
 
 # transpose data_matrix as proteomic_data_preprocessing expects samples as rows, features as columns
 data_matrix <- t(data_matrix)
@@ -40,15 +39,16 @@ processed_data <- preprocess_data(data=data_matrix,
                               options = options)
 
 # get the relevant feature values
-outcome <- processed_data[get_required(options, "feature"),]
-# get the condition values from secod column
-condtion <- metadata_matrix$condition
+outcome <- get_outcome(processed_data, get_required(options, "feature"))
 
 # get covariates (if valid batch values it will be a data frame with a single factor column 'batch')
 # votherwise will be null
 covs <- get_covariates(metadata_matrix$batch)
 results <- fit_model(outcome=outcome, 
-            condition=condition,
+            condition=metadata_matrix$condition,
             covariates = covs,
             model_type = get_required(options,"model_type"),
             return_covariate_adjusted = TRUE)
+
+write_model_results(results=results,
+                    output_dir=workdir)
