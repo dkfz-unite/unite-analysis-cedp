@@ -62,8 +62,6 @@ test_that(".fit_rfit returns list with correct names", {
     expect_named(fit, c("model", "reduced_model", "overall_test", "emm", "write_table_func"))
 })
 
-
-
 test_that(".fit_rfit emm is an emmGrid object", {
     fit <- .fit_rfit(full_formula, reduced_formula, fixture)
     expect_s4_class(fit$emm, "emmGrid")
@@ -347,49 +345,30 @@ test_that("fit_model results for a single total observation can still be written
     expect_true(file.exists(file.path(dir, "values.tsv")))
 })
 
-test_that("fit_model values are unchanged from outcome for a single total observation (default, with covariate)", {
-    result <- fit_model(
-        outcome    = single_observation_fixture$outcome,
-        condition  = single_observation_fixture$condition,
-        covariates = data.frame(age = single_observation_fixture$age),
-        model_type = "lm"
-    )
-    expect_equal(result$values$value, single_observation_fixture$outcome)
-})
-
-test_that("fit_model values are unchanged from outcome for a single total observation (default, no covariates)", {
-    result <- fit_model(
-        outcome    = single_observation_fixture$outcome,
-        condition  = single_observation_fixture$condition,
-        covariates = NULL,
-        model_type = "lm"
-    )
-    expect_equal(result$values$value, single_observation_fixture$outcome)
-})
-
-test_that("fit_model values are unchanged from outcome for a single total observation (covariate-adjusted, with covariate)", {
-    # with 1 observation the reduced model has 0 residual df, so residuals are
-    # exactly 0 and the covariate-adjusted value reduces to the raw outcome
-    result <- fit_model(
-        outcome    = single_observation_fixture$outcome,
-        condition  = single_observation_fixture$condition,
-        covariates = data.frame(age = single_observation_fixture$age),
-        model_type = "lm",
-        return_covariate_adjusted = TRUE
-    )
-    expect_equal(result$values$value, single_observation_fixture$outcome)
-})
-
-test_that("fit_model values are unchanged from outcome for a single total observation (covariate-adjusted, no covariates)", {
-    result <- fit_model(
-        outcome    = single_observation_fixture$outcome,
-        condition  = single_observation_fixture$condition,
-        covariates = NULL,
-        model_type = "lm",
-        return_covariate_adjusted = TRUE
-    )
-    expect_equal(result$values$value, single_observation_fixture$outcome)
-})
+# with 1 observation the reduced model has 0 residual df, so residuals are
+# exactly 0 and the covariate-adjusted value reduces to the raw outcome
+# regardless of model_type or covariates -- parameterized over both below,
+# since testthat has no built-in equivalent of pytest's parametrize
+for (method in c("lm", "rfit")) {
+    for (has_covariate in c(TRUE, FALSE)) {
+        for (adjusted in c(TRUE, FALSE)) {
+            covs <- if (has_covariate) data.frame(age = single_observation_fixture$age) else NULL
+            test_that(sprintf(
+                "fit_model values are unchanged from outcome for a single total observation (%s, %s covariate, adjusted=%s)",
+                method, if (has_covariate) "with" else "no", adjusted
+            ), {
+                result <- fit_model(
+                    outcome    = single_observation_fixture$outcome,
+                    condition  = single_observation_fixture$condition,
+                    covariates = covs,
+                    model_type = method,
+                    return_covariate_adjusted = adjusted
+                )
+                expect_equal(result$values$value, single_observation_fixture$outcome)
+            })
+        }
+    }
+}
 
 # ─── get_covariates ───────────────────────────────────────────────────────────
 
