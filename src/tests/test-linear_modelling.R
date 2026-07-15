@@ -179,6 +179,174 @@ test_that("fit_model results for single-level condition can still be written to 
     expect_true(file.exists(file.path(dir, "values.tsv")))
 })
 
+# ─── fit_model: one condition group has a single observation (>=2 groups total) ─
+
+set.seed(42)
+singleton_group_fixture <- data.frame(
+    outcome   = rnorm(20),
+    condition = factor(c("A", rep("B", 10), rep("C", 9))),
+    age       = rnorm(20)
+)
+
+test_that("fit_model does not error when one condition group has a single observation (lm)", {
+    expect_no_error(
+        fit_model(
+            outcome    = singleton_group_fixture$outcome,
+            condition  = singleton_group_fixture$condition,
+            covariates = data.frame(age = singleton_group_fixture$age),
+            model_type = "lm"
+        )
+    )
+})
+
+test_that("fit_model does not error when one condition group has a single observation (rfit)", {
+    expect_no_error(
+        fit_model(
+            outcome    = singleton_group_fixture$outcome,
+            condition  = singleton_group_fixture$condition,
+            covariates = data.frame(age = singleton_group_fixture$age),
+            model_type = "rfit"
+        )
+    )
+})
+
+test_that("fit_model returns valid structures when one condition group has a single observation", {
+    result <- fit_model(
+        outcome    = singleton_group_fixture$outcome,
+        condition  = singleton_group_fixture$condition,
+        covariates = data.frame(age = singleton_group_fixture$age),
+        model_type = "lm"
+    )
+    expect_gt(nrow(as.data.frame(result$contrasts)), 0)
+    expect_equal(nrow(result$values), nrow(singleton_group_fixture))
+    expect_false(anyNA(result$values$value))
+})
+
+test_that("fit_model results with a singleton condition group can still be written to disk", {
+    result <- fit_model(
+        outcome    = singleton_group_fixture$outcome,
+        condition  = singleton_group_fixture$condition,
+        covariates = data.frame(age = singleton_group_fixture$age),
+        model_type = "lm"
+    )
+    dir <- tempfile()
+    dir.create(dir)
+    expect_no_error(write_model_results(result, dir))
+    expect_true(file.exists(file.path(dir, "overall_test.tsv")))
+    expect_true(file.exists(file.path(dir, "contrasts.tsv")))
+    expect_true(file.exists(file.path(dir, "values.tsv")))
+})
+
+# ─── fit_model: only one condition value, and only one observation in total ────
+
+single_observation_fixture <- data.frame(
+    outcome   = 3.7,
+    condition = factor("A"),
+    age       = 0.5
+)
+
+test_that("fit_model does not error when there is only one observation in total (lm, with covariate)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_observation_fixture$outcome,
+            condition  = single_observation_fixture$condition,
+            covariates = data.frame(age = single_observation_fixture$age),
+            model_type = "lm"
+        )
+    )
+})
+
+test_that("fit_model does not error when there is only one observation in total (lm, no covariates)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_observation_fixture$outcome,
+            condition  = single_observation_fixture$condition,
+            covariates = NULL,
+            model_type = "lm"
+        )
+    )
+})
+
+test_that("fit_model does not error when there is only one observation in total (rfit, with covariate)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_observation_fixture$outcome,
+            condition  = single_observation_fixture$condition,
+            covariates = data.frame(age = single_observation_fixture$age),
+            model_type = "rfit"
+        )
+    )
+})
+
+test_that("fit_model does not error when there is only one observation in total (rfit, no covariates)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_observation_fixture$outcome,
+            condition  = single_observation_fixture$condition,
+            covariates = NULL,
+            model_type = "rfit"
+        )
+    )
+})
+
+test_that("fit_model returns valid placeholder structures for a single total observation (with covariate)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = data.frame(age = single_observation_fixture$age),
+        model_type = "lm"
+    )
+    expect_s3_class(result$overall_test, "data.frame")
+    expect_s3_class(result$contrasts, "data.frame")
+    expect_match(attr(result$overall_test, "heading"), "condition has only 1 unique value")
+    expect_equal(nrow(result$values), 1)
+    expect_false(anyNA(result$values$value))
+})
+
+test_that("fit_model returns valid placeholder structures for a single total observation (no covariates)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = NULL,
+        model_type = "lm"
+    )
+    expect_s3_class(result$overall_test, "data.frame")
+    expect_s3_class(result$contrasts, "data.frame")
+    expect_match(attr(result$overall_test, "heading"), "condition has only 1 unique value")
+    expect_equal(nrow(result$values), 1)
+    expect_false(anyNA(result$values$value))
+})
+
+test_that("fit_model results for a single total observation can still be written to disk (with covariate)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = data.frame(age = single_observation_fixture$age),
+        model_type = "lm"
+    )
+    dir <- tempfile()
+    dir.create(dir)
+    expect_no_error(write_model_results(result, dir))
+    expect_true(file.exists(file.path(dir, "overall_test.tsv")))
+    expect_true(file.exists(file.path(dir, "contrasts.tsv")))
+    expect_true(file.exists(file.path(dir, "values.tsv")))
+})
+
+test_that("fit_model results for a single total observation can still be written to disk (no covariates)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = NULL,
+        model_type = "lm"
+    )
+    dir <- tempfile()
+    dir.create(dir)
+    expect_no_error(write_model_results(result, dir))
+    expect_true(file.exists(file.path(dir, "overall_test.tsv")))
+    expect_true(file.exists(file.path(dir, "contrasts.tsv")))
+    expect_true(file.exists(file.path(dir, "values.tsv")))
+})
+
 # ─── get_covariates ───────────────────────────────────────────────────────────
 
 test_that("get_covariates returns a data.frame with a factor batch column for valid input", {
@@ -236,7 +404,7 @@ test_that("write_contrasts data section is readable as a table", {
     expect_gt(nrow(tbl), 0)
 })
 
-# ─── write_lm_test integration ────────────────────────────────────────────────
+# ─── write_lm_test integration with writing output files ────────────────────────────────────────────────
 
 test_that("write_lm_test creates a file", {
     fit  <- .fit_lm(full_formula, reduced_formula, fixture)
@@ -265,7 +433,7 @@ test_that("write_lm_test data section is readable as a table", {
     expect_gt(nrow(tbl), 0)
 })
 
-# ─── write_rfit_test integration ──────────────────────────────────────────────
+# ─── write_rfit_test integration with output files ──────────────────────────────────────────────
 
 test_that("write_rfit_test creates a file", {
     fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
@@ -291,5 +459,5 @@ test_that("write_rfit_test data section has expected columns", {
     lines <- readLines(path)
     tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
                         sep = "\t", header = TRUE, check.names = FALSE)
-    expect_true(all(c("Res.Df", "Df", "RD", "F", "Pr(>F)") %in% names(tbl)))
+    expect_true(all(c("Df", "RD", "F", "p") %in% names(tbl)))
 })
