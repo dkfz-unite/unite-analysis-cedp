@@ -347,6 +347,50 @@ test_that("fit_model results for a single total observation can still be written
     expect_true(file.exists(file.path(dir, "values.tsv")))
 })
 
+test_that("fit_model values are unchanged from outcome for a single total observation (default, with covariate)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = data.frame(age = single_observation_fixture$age),
+        model_type = "lm"
+    )
+    expect_equal(result$values$value, single_observation_fixture$outcome)
+})
+
+test_that("fit_model values are unchanged from outcome for a single total observation (default, no covariates)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = NULL,
+        model_type = "lm"
+    )
+    expect_equal(result$values$value, single_observation_fixture$outcome)
+})
+
+test_that("fit_model values are unchanged from outcome for a single total observation (covariate-adjusted, with covariate)", {
+    # with 1 observation the reduced model has 0 residual df, so residuals are
+    # exactly 0 and the covariate-adjusted value reduces to the raw outcome
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = data.frame(age = single_observation_fixture$age),
+        model_type = "lm",
+        return_covariate_adjusted = TRUE
+    )
+    expect_equal(result$values$value, single_observation_fixture$outcome)
+})
+
+test_that("fit_model values are unchanged from outcome for a single total observation (covariate-adjusted, no covariates)", {
+    result <- fit_model(
+        outcome    = single_observation_fixture$outcome,
+        condition  = single_observation_fixture$condition,
+        covariates = NULL,
+        model_type = "lm",
+        return_covariate_adjusted = TRUE
+    )
+    expect_equal(result$values$value, single_observation_fixture$outcome)
+})
+
 # ─── get_covariates ───────────────────────────────────────────────────────────
 
 test_that("get_covariates returns a data.frame with a factor batch column for valid input", {
