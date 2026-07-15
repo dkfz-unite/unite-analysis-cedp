@@ -34,6 +34,11 @@ write_rfit_test <- function(dr, path) {
     .write_table_with_header(tbl, header, path, row.names=FALSE)
 }
 
+write_skipped_test <- function(tbl, path) {
+    header <- attr(tbl, "heading")
+    .write_table_with_header(tbl, header, path, row.names = FALSE)
+}
+
 # functions to fit each model type
 .fit_lm <- function(full_formula, reduced_formula, model_data) {
     model         <- lm(full_formula, data = model_data)
@@ -73,6 +78,32 @@ write_rfit_test <- function(dr, path) {
         rfit           = .fit_rfit(full_formula, reduced_formula, model_data)
     )
     return(fit)
+}
+
+# condition has fewer than 2 unique values: no comparison is possible, so skip
+# the overall test and pairwise contrasts, but still fit the covariate-only
+# (reduced) model so covariate-adjusted values can be returned
+.fit_model_single_condition <- function(outcome, condition, covariates, model_type) {
+    method       <- match.arg(model_type, c("lm", "rfit"))
+    model_data   <- .get_model_data(outcome = outcome, condition = condition, covariates = covariates)
+    reduced_formula <- .build_formulas(covariates)$reduced_formula
+    reduced_model <- switch(method,
+        lm   = lm(reduced_formula, data = model_data),
+        rfit = Rfit::rfit(reduced_formula, data = model_data)
+    )
+
+    message <- sprintf(
+        "condition has only %d unique value(s); overall test and pairwise contrasts were not computed.",
+        length(unique(condition))
+    )
+    overall_test <- data.frame(note = message)
+    attr(overall_test, "heading") <- message
+
+    contrasts <- data.frame(note = message)
+    attr(contrasts, "mesg") <- message
+
+    return(list(reduced_model = reduced_model, overall_test = overall_test,
+                contrasts = contrasts, write_table_func = write_skipped_test))
 }
 
 # build data frame of data for modelling
@@ -147,6 +178,12 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 #'   covariate effects are removed. If \code{FALSE} (default), raw outcome
 #'   values are returned.
 #'
+#' @details If \code{condition} has fewer than 2 unique values, no comparison is
+#'   possible: the overall test and pairwise contrasts are skipped and replaced
+#'   with a one-row placeholder explaining why, but \code{values} is still
+#'   computed from the covariate-only model so covariate-adjusted values are
+#'   always returned.
+#'
 #' @return A named list with three elements:
 #'   \describe{
 #'     \item{overall_test}{data.frame with columns \code{statistic}, \code{df},
@@ -159,22 +196,30 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 #'   }
 fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", return_covariate_adjusted = FALSE) {
 
-    model_data <- .get_model_data(outcome=outcome,
-                                  condition=condition,
-                                  covariates=covariates)
+    if (length(unique(condition)) < 2) {
+        fit <- .fit_model_single_condition(outcome = outcome,
+                                            condition = condition,
+                                            covariates = covariates,
+                                            model_type = model_type)
+        contrasts <- fit$contrasts
+    } else {
+        model_data <- .get_model_data(outcome=outcome,
+                                      condition=condition,
+                                      covariates=covariates)
 
-    formulas        <- .build_formulas(covariates)
-    full_formula    <- formulas$full_formula
-    reduced_formula <- formulas$reduced_formula
-    fit <- .fit_model(full_formula=full_formula,
-                      model_data=model_data,
-                      reduced_formula=reduced_formula,
-                      method=model_type)
-  
-    # ---- pairwise contrasts ----
-    contrasts <- .pairwise_contrasts(emm=fit$emm,
-                                        adjust="tukey")
-    
+        formulas        <- .build_formulas(covariates)
+        full_formula    <- formulas$full_formula
+        reduced_formula <- formulas$reduced_formula
+        fit <- .fit_model(full_formula=full_formula,
+                          model_data=model_data,
+                          reduced_formula=reduced_formula,
+                          method=model_type)
+
+        # ---- pairwise contrasts ----
+        contrasts <- .pairwise_contrasts(emm=fit$emm,
+                                            adjust="tukey")
+    }
+
     # return either covariate adjusted or unadjusted values
     # residualising against the reduced model
     values <- .get_plot_values(model=fit$reduced_model,

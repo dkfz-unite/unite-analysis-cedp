@@ -1,5 +1,5 @@
 library(testthat)
-source(file.path(getwd(), "helpers", "linear_modelling.R"))
+#source(file.path(getwd(), "helpers", "linear_modelling.R"))
 
 # ─── Shared fixtures ───────────────────────────────────────────────────────────
 # 2 groups with a clear mean difference (0 vs 5) and one covariate
@@ -87,6 +87,96 @@ test_that(".fit_model errors on invalid method", {
     expect_error(
         .fit_model(full_formula, reduced_formula, fixture, method = "invalid")
     )
+})
+
+# ─── fit_model: condition has a single level ─────────────────────────────────
+
+set.seed(42)
+single_condition_fixture <- data.frame(
+    outcome   = rnorm(20),
+    condition = factor(rep("A", 20)),
+    age       = rnorm(20)
+)
+
+test_that(".fit_model_single_condition returns list with correct names", {
+    fit <- .fit_model_single_condition(
+        outcome    = single_condition_fixture$outcome,
+        condition  = single_condition_fixture$condition,
+        covariates = data.frame(age = single_condition_fixture$age),
+        model_type = "lm"
+    )
+    expect_named(fit, c("reduced_model", "overall_test", "contrasts", "write_table_func"))
+})
+
+test_that("fit_model does not error when condition has one level (lm)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_condition_fixture$outcome,
+            condition  = single_condition_fixture$condition,
+            covariates = data.frame(age = single_condition_fixture$age),
+            model_type = "lm"
+        )
+    )
+})
+
+test_that("fit_model does not error when condition has one level (rfit)", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_condition_fixture$outcome,
+            condition  = single_condition_fixture$condition,
+            covariates = data.frame(age = single_condition_fixture$age),
+            model_type = "rfit"
+        )
+    )
+})
+
+test_that("fit_model does not error when condition has one level and there are no covariates", {
+    expect_no_error(
+        fit_model(
+            outcome    = single_condition_fixture$outcome,
+            condition  = single_condition_fixture$condition,
+            covariates = NULL,
+            model_type = "lm"
+        )
+    )
+})
+
+test_that("fit_model returns valid covariate-adjusted values for every sample when condition has one level", {
+    result <- fit_model(
+        outcome    = single_condition_fixture$outcome,
+        condition  = single_condition_fixture$condition,
+        covariates = data.frame(age = single_condition_fixture$age),
+        model_type = "lm",
+        return_covariate_adjusted = TRUE
+    )
+    expect_equal(nrow(result$values), nrow(single_condition_fixture))
+    expect_false(anyNA(result$values$value))
+})
+
+test_that("fit_model overall_test and contrasts carry an explanatory note when condition has one level", {
+    result <- fit_model(
+        outcome    = single_condition_fixture$outcome,
+        condition  = single_condition_fixture$condition,
+        covariates = data.frame(age = single_condition_fixture$age),
+        model_type = "lm"
+    )
+    expect_match(attr(result$overall_test, "heading"), "condition has only 1 unique value")
+    expect_match(attr(result$contrasts, "mesg"), "condition has only 1 unique value")
+})
+
+test_that("fit_model results for single-level condition can still be written to disk", {
+    result <- fit_model(
+        outcome    = single_condition_fixture$outcome,
+        condition  = single_condition_fixture$condition,
+        covariates = data.frame(age = single_condition_fixture$age),
+        model_type = "lm"
+    )
+    dir <- tempfile()
+    dir.create(dir)
+    expect_no_error(write_model_results(result, dir))
+    expect_true(file.exists(file.path(dir, "overall_test.tsv")))
+    expect_true(file.exists(file.path(dir, "contrasts.tsv")))
+    expect_true(file.exists(file.path(dir, "values.tsv")))
 })
 
 # ─── get_covariates ───────────────────────────────────────────────────────────
