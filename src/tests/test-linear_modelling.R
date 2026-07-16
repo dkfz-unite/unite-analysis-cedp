@@ -67,6 +67,12 @@ test_that(".fit_rfit emm is an emmGrid object", {
     expect_s4_class(fit$emm, "emmGrid")
 })
 
+test_that(".fit_rfit passes when there are no covariates (reduced formula is intercept-only)", {
+    expect_no_error(
+        .fit_rfit(full_formula = outcome ~ condition, reduced_formula = outcome ~ 1, model_data = fixture)
+    )
+})
+
 
 # ─── .fit_model ──────────────────────────────────────────────────────────────
 
@@ -86,6 +92,70 @@ test_that(".fit_model errors on invalid method", {
         .fit_model(full_formula, reduced_formula, fixture, method = "invalid")
     )
 })
+
+# ─── fit_model: with / without covariates ────────────────────────────────────
+
+for (method in c("lm", "rfit")) {
+
+    test_that(sprintf("fit_model without covariates returns values identical to the original outcome (%s, unadjusted)", method), {
+        result <- fit_model(
+            outcome    = fixture$outcome,
+            condition  = fixture$condition,
+            covariates = NULL,
+            model_type = method,
+            return_covariate_adjusted = FALSE
+        )
+        expect_equal(result$values$value, fixture$outcome)
+    })
+
+    test_that(sprintf("fit_model without covariates returns values identical to the original outcome (%s, adjusted)", method), {
+        # with no covariates the reduced model is intercept-only, so
+        # residualising and re-centring on the grand mean is a no-op
+        result <- fit_model(
+            outcome    = fixture$outcome,
+            condition  = fixture$condition,
+            covariates = NULL,
+            model_type = method,
+            return_covariate_adjusted = TRUE
+        )
+        expect_equal(result$values$value, fixture$outcome)
+    })
+
+    test_that(sprintf("fit_model with covariates returns unmodified outcome when return_covariate_adjusted is FALSE (%s)", method), {
+        result <- fit_model(
+            outcome    = fixture$outcome,
+            condition  = fixture$condition,
+            covariates = data.frame(age = fixture$age),
+            model_type = method,
+            return_covariate_adjusted = FALSE
+        )
+        expect_equal(result$values$value, fixture$outcome)
+    })
+
+    test_that(sprintf("fit_model with covariates returns covariate-adjusted values when return_covariate_adjusted is TRUE (%s)", method), {
+        result <- fit_model(
+            outcome    = fixture$outcome,
+            condition  = fixture$condition,
+            covariates = data.frame(age = fixture$age),
+            model_type = method,
+            return_covariate_adjusted = TRUE
+        )
+        reduced_model <- if (method == "rfit") Rfit::rfit(outcome ~ age, data = fixture) else lm(outcome ~ age, data = fixture)
+        expected <- as.numeric(residuals(reduced_model)) + mean(fixture$outcome, na.rm = TRUE)
+        expect_equal(result$values$value, expected)
+        expect_false(isTRUE(all.equal(result$values$value, fixture$outcome)))
+    })
+
+    test_that(sprintf("fit_model preserves condition labels regardless of covariates (%s)", method), {
+        result <- fit_model(
+            outcome    = fixture$outcome,
+            condition  = fixture$condition,
+            covariates = data.frame(age = fixture$age),
+            model_type = method
+        )
+        expect_equal(as.character(result$values$condition), as.character(fixture$condition))
+    })
+}
 
 # ─── fit_model: condition has a single level ─────────────────────────────────
 
@@ -461,14 +531,14 @@ test_that("write_lm_test data section is readable as a table", {
 test_that("write_rfit_test creates a file", {
     fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
     path <- tempfile(fileext = ".tsv")
-    write_rfit_test(fit$overall_test, path)
+    write_rfit_drop_test(fit$overall_test, path)
     expect_true(file.exists(path))
 })
 
 test_that("write_rfit_test header contains Rfit::drop.test and both formula strings", {
     fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
     path <- tempfile(fileext = ".tsv")
-    write_rfit_test(fit$overall_test, path)
+    write_rfit_drop_test(fit$overall_test, path)
     header <- grep("^#", readLines(path), value = TRUE)
     expect_true(any(grepl("Rfit::drop.test",         header, fixed = TRUE)))
     expect_true(any(grepl(deparse1(full_formula),    header, fixed = TRUE)))
@@ -478,9 +548,44 @@ test_that("write_rfit_test header contains Rfit::drop.test and both formula stri
 test_that("write_rfit_test data section has expected columns", {
     fit  <- .fit_rfit(full_formula, reduced_formula, fixture)
     path <- tempfile(fileext = ".tsv")
-    write_rfit_test(fit$overall_test, path)
+    write_rfit_drop_test(fit$overall_test, path)
     lines <- readLines(path)
     tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
                         sep = "\t", header = TRUE, check.names = FALSE)
     expect_true(all(c("Df", "RD", "F", "p") %in% names(tbl)))
+})
+
+# ─── .fit_rfit + write_rfit_summary integration (intercept-only reduced formula) ─
+
+test_that(".fit_rfit dispatches to write_rfit_summary when the reduced formula is intercept-only", {
+    fit <- .fit_rfit(full_formula = outcome ~ condition, reduced_formula = outcome ~ 1, model_data = fixture)
+    expect_identical(fit$write_table_func, write_rfit_summary)
+})
+
+test_that("write_rfit_summary creates a file for an intercept-only reduced model", {
+    fit  <- .fit_rfit(full_formula = outcome ~ condition, reduced_formula = outcome ~ 1, model_data = fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_summary(fit$overall_test, path)
+    expect_true(file.exists(path))
+})
+
+test_that("write_rfit_summary header contains Rfit::summary and both formula strings", {
+    fit  <- .fit_rfit(full_formula = outcome ~ condition, reduced_formula = outcome ~ 1, model_data = fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_summary(fit$overall_test, path)
+    header <- grep("^#", readLines(path), value = TRUE)
+    expect_true(any(grepl("Rfit::summary", header, fixed = TRUE)))
+    expect_true(any(grepl(deparse1(outcome ~ condition), header, fixed = TRUE)))
+    expect_true(any(grepl(deparse1(outcome ~ 1),         header, fixed = TRUE)))
+})
+
+test_that("write_rfit_summary data section has expected columns", {
+    fit  <- .fit_rfit(full_formula = outcome ~ condition, reduced_formula = outcome ~ 1, model_data = fixture)
+    path <- tempfile(fileext = ".tsv")
+    write_rfit_summary(fit$overall_test, path)
+    lines <- readLines(path)
+    tbl   <- read.table(text = paste(grep("^[^#]", lines, value = TRUE), collapse = "\n"),
+                        sep = "\t", header = TRUE, check.names = FALSE)
+    expect_true(all(c("Df", "F", "p") %in% names(tbl)))
+    expect_equal(nrow(tbl), 1)
 })

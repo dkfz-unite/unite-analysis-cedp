@@ -17,14 +17,13 @@ write_lm_test <- function(av, path) {
     .write_table_with_header(av, header, path, row.names=FALSE)
 }
 
-write_rfit_test <- function(dr, path) {
+write_rfit_drop_test <- function(dr, path) {
     formulas <- attr(dr, "formulas")
     header <- paste0(
         "Rfit::drop.test",
         "\n  M1: ", deparse1(formulas$reduced),
         "\n  M2: ", deparse1(formulas$full)
     )
-    #browser()
     tbl <- data.frame(
         Df       = paste(dr$df1,dr$df2,sep=","),
         RD       = dr$RD,
@@ -32,6 +31,21 @@ write_rfit_test <- function(dr, path) {
         p = dr$p.value[1]
     )
     .write_table_with_header(tbl, header, path, row.names=FALSE)
+}
+
+write_rfit_summary <- function(dr, path) {
+    formulas <- attr(dr, "formulas")
+    header <- paste0(
+        "Rfit::summary",
+        "\n  M1: ", deparse1(formulas$reduced),
+        "\n  M2: ", deparse1(formulas$full)
+    )
+    tbl <- data.frame(
+        Df = paste(attr(dr, "df1"), attr(dr, "df2"), sep = ","),
+        F  = dr$dropstat,
+        p  = dr$droppval
+    )
+    .write_table_with_header(tbl, header, path, row.names = FALSE)
 }
 
 write_skipped_test <- function(tbl, path) {
@@ -48,18 +62,46 @@ write_skipped_test <- function(tbl, path) {
     return(list(model = model, reduced_model = reduced_model, overall_test = av, emm = emm, write_table_func=write_lm_test))
 }
 
+.is_intercept_only <- function(formula) {
+    length(attr(terms(formula), "term.labels")) == 0
+}
+
 .fit_rfit <- function(full_formula, reduced_formula, model_data) {
     model         <- Rfit::rfit(full_formula, data = model_data)
-    reduced_model <- Rfit::rfit(reduced_formula, data = model_data)
-    dr <- Rfit::drop.test(model, reduced_model)
-    attr(dr, "formulas") <- list(full = full_formula, reduced = reduced_formula)
+    if (.is_intercept_only(reduced_formula)) {
+        # if the reduced formula contains only an intercept
+        # we cannot use drop-test (Rfit cannot fit an intercept-only model)
+        # but we can get the significance from summary of the full model
+        dr <- summary(model)
+        # add the degrees of freedom to the object
+        pfull <- length(attr(terms(full_formula), "term.labels")) + 1
+        pred  <- length(attr(terms(reduced_formula), "term.labels"))
+        df1 <- pfull - pred
+        df2 <- nrow(model_data) - pfull
+        attr(dr, "df1") <- df1
+        attr(dr, "df2") <- df2
+        attr(dr, "formulas") <- list(full = full_formula, reduced = reduced_formula)
+        write_output_func <- write_rfit_summary
+        # we still need to return a valid reduced model object
+        # for generating covariate-adjusted values (which, in the absence of covariates, will simply be equal to input values)
+        # for this purpose it does not matter at all how the model is fitted, since it will have no predictive power in any case
+        # so we can fall back to lm for this case
+        reduced_model <- lm(reduced_formula, data=model_data)
+    } else {
+        # make a drop test between the full and reduced model
+        reduced_model <- Rfit::rfit(reduced_formula, data = model_data)
+        dr <- Rfit::drop.test(model, reduced_model)
+        attr(dr, "formulas") <- list(full = full_formula, reduced = reduced_formula)
+        write_output_func <- write_rfit_drop_test
+    }
+
     df_resid <- nrow(model_data) - length(coef(model))
     emm <- emmeans::emmeans(
         emmeans::qdrg(full_formula, data = model_data,
                       coef = coef(model), vcov = vcov(model), df = df_resid),
         ~ condition
     )
-    return(list(model = model, reduced_model = reduced_model, overall_test = dr, emm = emm, write_table_func=write_rfit_test))
+    return(list(model = model, reduced_model = reduced_model, overall_test = dr, emm = emm, write_table_func=write_output_func))
 }
 
 # build the formula objects
@@ -87,10 +129,16 @@ write_skipped_test <- function(tbl, path) {
     method       <- match.arg(model_type, c("lm", "rfit"))
     model_data   <- .get_model_data(outcome = outcome, condition = condition, covariates = covariates)
     reduced_formula <- .build_formulas(covariates)$reduced_formula
-    reduced_model <- switch(method,
-        lm   = lm(reduced_formula, data = model_data),
-        rfit = Rfit::rfit(reduced_formula, data = model_data)
-    )
+    # Rfit::rfit cannot fit an intercept-only model (errors with "x cannot only
+    # contain an intercept", which is what reduced_formula is when there are no
+    # covariates) and errors on a single observation regardless of formula
+    # ("subscript out of bounds"); fall back to lm in either case
+    use_rfit <- method == "rfit" && !is.null(covariates) && nrow(model_data) >= 2
+    reduced_model <- if (use_rfit) {
+        Rfit::rfit(reduced_formula, data = model_data)
+    } else {
+        lm(reduced_formula, data = model_data)
+    }
 
     message <- sprintf(
         "condition has only %d unique value(s); overall test and pairwise contrasts were not computed.",
