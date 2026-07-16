@@ -3,7 +3,10 @@ FROM ghcr.io/dkfz-unite/docker-rdev-biocmanager:latest AS base
 FROM base AS install
 COPY ./src/install /src
 WORKDIR /src
-RUN Rscript install.R
+RUN apt-get update && \
+apt-get install -y --no-install-recommends libuv1-dev && \
+rm -rf /var/lib/apt/lists/* && \
+Rscript install.R
 RUN apt-get clean
 
 FROM install AS final
