@@ -249,6 +249,10 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", return_covariate_adjusted = FALSE, sample = NULL) {
 
     if (length(unique(condition)) < 2) {
+        # with only one condition we cannot test its effect, 
+        # but for downstream we still need a reduced model
+        # the below returns 'dummy' data structures for the outputs that cannot
+        # be computed
         fit <- .fit_model_single_condition(outcome = outcome,
                                             condition = condition,
                                             covariates = covariates,
