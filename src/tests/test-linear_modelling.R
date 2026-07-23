@@ -157,6 +157,45 @@ for (method in c("lm", "rfit")) {
     })
 }
 
+# ─── fit_model: sample column ────────────────────────────────────────────────
+
+test_that("fit_model omits sample column when not supplied", {
+    result <- fit_model(
+        outcome    = fixture$outcome,
+        condition  = fixture$condition,
+        covariates = data.frame(age = fixture$age)
+    )
+    expect_false("sample" %in% names(result$values))
+})
+
+test_that("fit_model puts sample as the first column of values, in the given order", {
+    ids <- paste0("sample_", seq_len(nrow(fixture)))
+    result <- fit_model(
+        outcome    = fixture$outcome,
+        condition  = fixture$condition,
+        covariates = data.frame(age = fixture$age),
+        sample     = ids
+    )
+    expect_equal(names(result$values)[1], "sample")
+    expect_equal(result$values$sample, ids)
+})
+
+test_that("fit_model writes sample as the first column of values.tsv", {
+    ids <- paste0("sample_", seq_len(nrow(fixture)))
+    result <- fit_model(
+        outcome    = fixture$outcome,
+        condition  = fixture$condition,
+        covariates = data.frame(age = fixture$age),
+        sample     = ids
+    )
+    dir <- tempfile()
+    dir.create(dir)
+    write_model_results(result, dir)
+    tbl <- read.table(file.path(dir, "values.tsv"), sep = "\t", header = TRUE)
+    expect_equal(names(tbl)[1], "sample")
+    expect_equal(tbl$sample, ids)
+})
+
 # ─── fit_model: condition has a single level ─────────────────────────────────
 
 set.seed(42)
