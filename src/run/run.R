@@ -7,11 +7,12 @@ source(file.path(getwd(), "helpers", "preprocessing.R"))
 source(file.path(getwd(), "helpers", "linear_modelling.R"))
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
-workdir <- args[1]
-metadata_file <- file.path(workdir, "metadata.tsv")
-results_file <- file.path(workdir, "results.tsv")
-data_file <- file.path(workdir, "data.tsv")
-options_file <- file.path(workdir, "options.json")
+inputdir <- file.path(args[1], "input")
+outputdir <- file.path(args[1], "output")
+
+metadata_file <- file.path(inputdir, "metadata.tsv")
+data_file <- file.path(inputdir, "data.tsv")
+options_file <- file.path(inputdir, "options.json")
 
 # Read data and metadata
 data <- read_tsv(data_file)
@@ -51,4 +52,4 @@ results <- fit_model(outcome=outcome,
             return_covariate_adjusted = TRUE)
 
 write_model_results(results=results,
-                    output_dir=workdir)
+                    output_dir=outputdir)
