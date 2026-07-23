@@ -213,6 +213,9 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 #' @param condition Factor giving the conditioning variable of interest (2 or more levels).
 #' @param covariates Optional data.frame of adjustment covariates. Column names are
 #'   used directly in the model formula. NULL (default) fits an unadjusted model.
+#' @param sample Optional vector of sample identifiers, one per observation.
+#'   If supplied, it is included as the first column of \code{values}. NULL
+#'   (default) omits this column.
 #' @param method Character string selecting the modelling approach. One of:
 #'   \describe{
 #'     \item{"lm"}{Ordinary least squares via \code{lm}. Overall test uses a
@@ -240,9 +243,10 @@ covariates <- if (!is.null(batch_vector)) data.frame(batch = batch_vector) else 
 #'       \code{SE}, \code{CI_lower}, \code{CI_upper}, \code{p_value}, and
 #'       for all pairwise condition comparisons (p valuyes are tukey adjusted)
 #'     \item{values}{data.frame with columns \code{condition} and \code{value}
-#'       containing the outcome values (adjusted or unadjusted) per sample.}
+#'       (preceded by \code{sample} if supplied) containing the outcome
+#'       values (adjusted or unadjusted) per sample.}
 #'   }
-fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", return_covariate_adjusted = FALSE) {
+fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", return_covariate_adjusted = FALSE, sample = NULL) {
 
     if (length(unique(condition)) < 2) {
         fit <- .fit_model_single_condition(outcome = outcome,
@@ -274,11 +278,16 @@ fit_model <- function(outcome, condition, covariates = NULL, model_type = "lm", 
                                outcome=outcome,
                                return_covariate_adjusted=return_covariate_adjusted)
 
+    values_df <- data.frame(condition = condition, value = values)
+    if (!is.null(sample)) {
+        values_df <- cbind(sample = sample, values_df)
+    }
+
     list(
         write_table_func = fit$write_table_func,
         overall_test = fit$overall_test,
         contrasts    = contrasts,
-        values       = data.frame(condition = condition, value = values)
+        values       = values_df
     )
 }
 
@@ -296,6 +305,6 @@ write_model_results <- function(results, output_dir, prefix = NULL, write_test_f
     results$write_table_func(results$overall_test, fname("overall_test"))
     # execute generic writers for contrasts and values
     write_contrasts(results$contrasts, fname("contrasts"))
-    write.table(results$values,    fname("values"),    sep = "\t", row.names = FALSE, quote = FALSE)
+    write.table(results$values,    fname("values"),    sep = "\t", row.names = FALSE, quote = FALSE, na="")
     invisible(NULL)
 }

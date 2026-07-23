@@ -45,11 +45,12 @@ outcome <- get_outcome(processed_data, get_required(options, "feature"))
 # get covariates (if valid batch values it will be a data frame with a single factor column 'batch')
 # votherwise will be null
 covs <- get_covariates(metadata_matrix$batch)
-results <- fit_model(outcome=outcome, 
+results <- fit_model(outcome=outcome,
             condition=metadata_matrix$condition,
             covariates = covs,
             model_type = get_required(options,"model_type"),
-            return_covariate_adjusted = TRUE)
+            return_covariate_adjusted = TRUE,
+            sample = rownames(metadata_matrix))
 
 write_model_results(results=results,
                     output_dir=outputdir)
