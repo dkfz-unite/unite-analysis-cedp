@@ -1,4 +1,6 @@
 install_and_check <- function(pkg, bioc = FALSE) {
+    # helper to install packages but ensure error is raised if installation 
+    # fails
     if (bioc) BiocManager::install(pkg) else install.packages(pkg)
     if (!requireNamespace(pkg, quietly = TRUE))
         stop("Failed to install: ", pkg)

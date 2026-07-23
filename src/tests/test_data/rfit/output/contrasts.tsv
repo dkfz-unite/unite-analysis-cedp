@@ -1,0 +1,8 @@
+# Results are averaged over the levels of: batch
+# Confidence level used: 0.95
+# Conf-level adjustment: tukey method for comparing a family of 3 estimates
+# P value adjustment: tukey method for comparing a family of 3 estimates
+contrast	estimate	SE	df	lower.CL	upper.CL	t.ratio	p.value
+glioblastoma_IDH_wildtype_mesenchymal_type - glioblastoma_IDH_wildtype_RTK1_type	-0.303841903450984	0.593154848273443	13	-1.87002998246974	1.26234617556777	-0.51224718863111	0.866760533718761
+glioblastoma_IDH_wildtype_mesenchymal_type - meningioma_benign	0.329409164948737	0.625540632553951	13	-1.32229154102982	1.98110987092729	0.526599149289198	0.859831713599664
+glioblastoma_IDH_wildtype_RTK1_type - meningioma_benign	0.633251068399721	0.525622357420173	13	-0.754621714994783	2.02112385179423	1.20476433214866	0.471198954625143
