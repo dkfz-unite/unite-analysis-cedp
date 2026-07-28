@@ -1,0 +1,5 @@
+# Rfit::drop.test
+#   M1: outcome ~ batch
+#   M2: outcome ~ condition + batch
+Df	RD	F	p
+2,13	1.24018844092793	1.32342051279903	0.299818505107304

@@ -1,0 +1,7 @@
+# Analysis of Variance Table
+# 
+# Model 1: outcome ~ batch
+# Model 2: outcome ~ condition + batch
+Res.Df	RSS	Df	Sum of Sq	F	Pr(>F)
+15	11.0562204002151				
+13	8.63490169926106	2	2.42131870095402	1.82266945291896	0.200553209750671

@@ -1,0 +1,13 @@
+{
+  "feature_type": "gene",
+  "feature": "ENSG00000114374",
+  "condition_property": "specimen_tumor_class",
+  "normalization_log_offset": 0.1,
+  "normalization_method": "median",
+  "imputation_method": "mindet",
+  "stratify_imputation_by_batch": false,
+  "batch_correction_method": null,
+  "min_non_missing_fraction": 0.7,
+  "require_min_fraction_one_class": true,
+  "model_type": "lm"
+}
