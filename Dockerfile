@@ -10,7 +10,7 @@ Rscript install.R
 RUN apt-get clean
 
 FROM install AS final
-COPY ./src/run /src
+COPY ./src /src
 COPY ./app /app
 WORKDIR /app
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
